@@ -2,6 +2,10 @@
 import { useState, useRef, useEffect } from "react";
 import "./App.css";
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "")
+  .trim()
+  .replace(/\/+$/, "");
+
 const suggestions = [
   "What are your technical skills?",
   "Tell me about your projects",
@@ -22,26 +26,77 @@ export default function App() {
 
   async function sendMessage(text = question) {
     const cleanQuestion = text.trim();
+
     if (!cleanQuestion || loading) return;
 
     setMessages((prev) => [
       ...prev,
       { role: "user", content: cleanQuestion },
     ]);
+
     setQuestion("");
     setLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
+      if (!API_BASE_URL) {
+        throw new Error(
+          "VITE_API_URL missing hai. Vercel Environment Variables check karo."
+        );
+      }
+
+      // Validate the backend URL before sending the request.
+      let apiUrl;
+
+      try {
+        apiUrl = new URL(API_BASE_URL);
+      } catch {
+        throw new Error(
+          `Invalid backend URL: ${API_BASE_URL}`
+        );
+      }
+
+      if (!["https:", "http:"].includes(apiUrl.protocol)) {
+        throw new Error("Backend URL ka protocol invalid hai.");
+      }
+
+      // Prevent accidentally sending requests to the frontend domain.
+      if (apiUrl.hostname.endsWith("vercel.app")) {
+        throw new Error(
+          "VITE_API_URL mein frontend URL hai. Render backend URL set karo."
+        );
+      }
+
+      const chatUrl = `${apiUrl.origin}${apiUrl.pathname.replace(/\/+$/, "")}/chat`;
+
+      console.log("HireMeAI API URL:", chatUrl);
+
+      const response = await fetch(chatUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: cleanQuestion }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: cleanQuestion,
+        }),
       });
 
-      const data = await response.json();
+      // Read the response as text first, because errors may not be JSON.
+      const responseText = await response.text();
+
+      let data;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(
+          `Backend ne valid JSON nahi diya. HTTP ${response.status}. Response: ${responseText.slice(0, 200)}`
+        );
+      }
 
       if (!response.ok) {
-        throw new Error(data.detail || "Something went wrong.");
+        throw new Error(
+          data.detail || `Backend error: HTTP ${response.status}`
+        );
       }
 
       setMessages((prev) => [
@@ -52,11 +107,13 @@ export default function App() {
         },
       ]);
     } catch (error) {
+      console.error("HireMeAI request failed:", error);
+
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: `Unable to connect to the backend. Check that your server is running. ${error.message}`,
+          content: `Request failed: ${error.message}`,
         },
       ]);
     } finally {
@@ -79,9 +136,15 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#" onClick={(e) => e.preventDefault()}>
+        <a
+          className="brand"
+          href="#"
+          onClick={(event) => event.preventDefault()}
+        >
           <span className="brand-icon">H</span>
-          <span>HireMe<span className="brand-accent">AI</span></span>
+          <span>
+            HireMe<span className="brand-accent">AI</span>
+          </span>
         </a>
 
         <button className="new-chat" onClick={newConversation}>
@@ -103,7 +166,9 @@ export default function App() {
             <strong>Manan Sahni</strong>
             <span>Candidate profile</span>
           </div>
-          <span className="profile-status" title="Profile loaded">●</span>
+          <span className="profile-status" title="Profile loaded">
+            ●
+          </span>
         </div>
       </aside>
 
@@ -111,7 +176,9 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-left">
             <span className="status-dot" />
-            <span>HireMeAI <span className="topbar-muted">/ Assistant</span></span>
+            <span>
+              HireMeAI <span className="topbar-muted">/ Assistant</span>
+            </span>
           </div>
           <span className="topbar-tag">RESUME ASSISTANT</span>
         </header>
@@ -120,6 +187,7 @@ export default function App() {
           {messages.length === 0 ? (
             <div className="welcome">
               <div className="welcome-icon">H</div>
+
               <div className="eyebrow">
                 YOUR PERSONAL CANDIDATE ASSISTANT
               </div>
@@ -183,11 +251,17 @@ export default function App() {
                       <span className="message-name">
                         {message.role === "user" ? "You" : "HireMeAI"}
                       </span>
+
                       {message.role === "assistant" && (
-                        <span className="assistant-label">ASSISTANT</span>
+                        <span className="assistant-label">
+                          ASSISTANT
+                        </span>
                       )}
                     </div>
-                    <div className="message-text">{message.content}</div>
+
+                    <div className="message-text">
+                      {message.content}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -195,11 +269,15 @@ export default function App() {
               {loading && (
                 <div className="message-row assistant">
                   <div className="message-avatar">H</div>
+
                   <div className="message-content">
                     <div className="message-header">
                       <span className="message-name">HireMeAI</span>
-                      <span className="assistant-label">ASSISTANT</span>
+                      <span className="assistant-label">
+                        ASSISTANT
+                      </span>
                     </div>
+
                     <div className="message-text typing">
                       <span />
                       <span />
@@ -224,6 +302,7 @@ export default function App() {
               aria-label="Your message"
               disabled={loading}
             />
+
             <button
               className="send-button"
               type="submit"
@@ -235,10 +314,12 @@ export default function App() {
           </form>
 
           <p className="disclaimer">
-            <span>↳</span> AI-generated responses based on available resume information.
+            <span>↳</span> AI-generated responses based on available
+            resume information.
           </p>
         </footer>
       </main>
     </div>
   );
 }
+
