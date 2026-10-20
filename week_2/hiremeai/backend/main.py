@@ -229,17 +229,20 @@ app = FastAPI(
 )
 
 # Allow the local React development server to access the API.
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://hiremeai-abc.vercel.app",
-],
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://llm-git-main-manans-projects-f9ccd179.vercel.app",
+        "https://llm-chi-kohl.vercel.app",
+    ],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
+
 
 
 # --------------------------------------------------
